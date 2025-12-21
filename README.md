@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="bart-logo.png" alt="Bart Logo" width="200">
+</p>
+
 # Bart
 
 Bart is a command-line tool written in Rust for analyzing and visualizing directory usage. It combines the hierarchical view of `tree` with the disk usage information of `du`, presenting it in a colorful, easy-to-read format.
