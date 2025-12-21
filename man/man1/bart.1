@@ -1,0 +1,46 @@
+.TH BART 1 "December 2025" "v0.1.0" "User Commands"
+.SH NAME
+bart \- directory usage analyzer and visualizer
+.SH SYNOPSIS
+.B bart
+[\fIOPTIONS\fR] [\fIPATH\fR]
+.SH DESCRIPTION
+.B bart
+is a command-line utility that scans directories and displays a tree-like structure containing file sizes and counts. It is designed to help users visualize disk usage with colorful output and size bars.
+.SH OPTIONS
+.TP
+.BR \-d ", " \-\-depth " \fIDEPTH\fR"
+Specify the maximum recursion depth to display. The default is 1.
+.TP
+.BR \-n ", " \-\-limit " \fILIMIT\fR"
+Limit the number of entries displayed per directory. Set to 0 to show all entries. The default is 0.
+.TP
+.BR \-s ", " \-\-sort " \fISORT\fR"
+Sort the entries by \fBsize\fR or \fBname\fR. The default is \fBsize\fR.
+.TP
+.BR \-h ", " \-\-help
+Print help information.
+.TP
+.BR \-V ", " \-\-version
+Print version information.
+.SH ARGUMENTS
+.TP
+.I PATH
+The directory to scan. Defaults to the current directory (".").
+.SH EXAMPLES
+.B bart
+.RS 4
+Scan the current directory with default settings.
+.RE
+.PP
+.B bart \-\-depth 2 src/
+.RS 4
+Scan the 'src/' directory with a depth of 2.
+.RE
+.PP
+.B bart \-n 5 \-\-sort name
+.RS 4
+Show only the first 5 entries per directory, sorted by name.
+.RE
+.SH AUTHOR
+AdminX
