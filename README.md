@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="bart-logo.png" alt="Bart Logo" width="200">
+  <img src="bart-logo.png" alt="Bart Logo" width="500">
 </p>
 
 # Bart
