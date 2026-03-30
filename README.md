@@ -2,13 +2,11 @@
   <img src="bart-logo.png" alt="Bart Logo" width="500">
 </p>
 
-<p align="center">
-  <img src="demo.gif" alt="Bart Demo" width="800">
-</p>
-
 # Bart
 
 Bart is a fast, highly visual command-line tool written in Rust for analyzing and understanding directory usage. It goes beyond combining `tree` and `du`, acting as a temporal filesystem profiler with interactive filtering, semantic code grouping, and beautiful emoji-based terminal output.
+
+![Core Scan Demo](assets/vhs/scan_core.gif)
 
 ## Features
 
@@ -24,9 +22,17 @@ Bart is a fast, highly visual command-line tool written in Rust for analyzing an
 - **Automated Project Detection**: Intelligent heuristics (Cargo, npm, Go, Git) automatically detect and index new projects for low-latency access.
 - **Exporting**: Export the directory tree as structured data for downstream integrations via `--json` or `--csv`.
 
-## Observability Daemon
+## Differential Mode
+Compare the current filesystem state against the previous scan to see exactly where your storage went.
+![Differential Scan Demo](assets/vhs/differential.gif)
 
+## Interactive TUI Filter
+Browse your filesystem with a keyboard-driven interface. Filter by extension, navigate instantly, and perform file actions without leaving the tool.
+![Interactive Filter Demo](assets/vhs/interactive_tui.gif)
+
+## Observability Daemon
 Bart includes a powerful dual-daemon system for high-performance filesystem monitoring.
+![Daemon Demo](assets/vhs/daemon_observability.gif)
 
 ### Inner Daemon (Tracking)
 Monitors indexed directories in real-time. Any file change (create, modify, delete) triggers an immediate, parallelized re-scan of the project root, keeping your cache (`.toon`) perfectly synchronized.
