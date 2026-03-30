@@ -16,7 +16,35 @@ Bart is a fast, highly visual command-line tool written in Rust for analyzing an
 - **Differential Mode**: Run `bart --diff` to compare the current filesystem state against the previous scan, showing new files, deleted files, and exact size changes (`Δ`).
 - **Semantic Breakdown**: Run `bart --explain` to group a directory's size by language (Rust, Python, JS/TS), vendored dependencies, or build artifact stages (Deps, Incremental Cache, Binaries).
 - **Interactive TUI Filter**: Run `bart --filter` to open a terminal UI where you can cycle through detected file formats, traverse files with arrow keys, and instantly open, edit, or remove them.
+- **Smart Indexing & Caching**: Bart uses a background observability daemon to maintain near-instant directory caches.
+- **Automated Project Detection**: Intelligent heuristics (Cargo, npm, Go, Git) automatically detect and index new projects for low-latency access.
 - **Exporting**: Export the directory tree as structured data for downstream integrations via `--json` or `--csv`.
+
+## Observability Daemon
+
+Bart includes a powerful dual-daemon system for high-performance filesystem monitoring.
+
+### Inner Daemon (Tracking)
+Monitors indexed directories in real-time. Any file change (create, modify, delete) triggers an immediate, parallelized re-scan of the project root, keeping your cache (`.toon`) perfectly synchronized.
+
+### Outer Daemon (Discovery)
+Background discovery service that identifies massive unindexed directories (>100MB) and high-value project roots. It suggests new paths to track or automatically indexes them based on your configuration.
+
+### Daemon Commands
+
+```bash
+# Start the background daemon
+bart daemon start
+
+# Check daemon and discovery status
+bart daemon status
+
+# Add a directory to the watch list
+bart index add <path>
+
+# Toggle intelligent auto-indexing of new projects
+bart index auto true
+```
 
 ## Installation
 
