@@ -537,6 +537,26 @@ fn manage_index(action: IndexCommands) {
     }
 }
 
+fn get_discoveries_path() -> PathBuf {
+    get_bart_dir().join("discoveries.json")
+}
+
+fn save_discoveries(discoveries: &HashMap<PathBuf, u64>) {
+    let path = get_discoveries_path();
+    if let Ok(file) = File::create(&path) {
+        let _ = serde_json::to_writer_pretty(file, discoveries);
+    }
+}
+
+fn load_discoveries() -> HashMap<PathBuf, u64> {
+    let path = get_discoveries_path();
+    if let Ok(content) = fs::read_to_string(&path) {
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        HashMap::new()
+    }
+}
+
 fn get_pid_path() -> PathBuf {
     get_bart_dir().join("daemon.pid")
 }
@@ -558,6 +578,42 @@ fn manage_daemon(action: DaemonCommands) {
                 let _ = fs::remove_file(&pid_path);
                 return;
             }
+
+            // Start Outer Daemon thread for discovery
+            let indices_clone = indices.clone();
+            std::thread::spawn(move || {
+                loop {
+                    let mut discoveries = HashMap::new();
+                    if let Ok(home) = std::env::var("HOME") {
+                        let home_path = PathBuf::from(home);
+                        if let Ok(entries) = fs::read_dir(&home_path) {
+                            for entry in entries.flatten() {
+                                let path = entry.path();
+                                if path.is_dir() && !path.file_name().unwrap_or_default().to_string_lossy().starts_with('.') {
+                                    let mut is_indexed = false;
+                                    for idx in &indices_clone {
+                                        if path.starts_with(idx) || idx.starts_with(&path) {
+                                            is_indexed = true;
+                                            break;
+                                        }
+                                    }
+                                    if !is_indexed {
+                                        let dummy = Arc::new(AtomicU64::new(0));
+                                        let gitignore = GitignoreBuilder::new("").build().unwrap();
+                                        if let Ok(node) = scan(&path, 0, &SortBy::Size, &dummy, &gitignore, true) {
+                                            if node.size > 100_000_000 { // 100 MB threshold
+                                                discoveries.insert(path, node.size);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    save_discoveries(&discoveries);
+                    std::thread::sleep(Duration::from_secs(3600)); // sleep an hour
+                }
+            });
 
             let (tx, rx) = channel();
             let mut watcher = notify::recommended_watcher(tx).unwrap();
@@ -617,6 +673,17 @@ fn manage_daemon(action: DaemonCommands) {
                 }
             } else {
                 println!("Daemon Status: \u{26A0}\u{FE0F} Not running");
+            }
+            
+            let discoveries = load_discoveries();
+            if !discoveries.is_empty() {
+                println!("\n\u{1F50D} Outer Daemon Discoveries:");
+                let mut d_vec: Vec<_> = discoveries.into_iter().collect();
+                d_vec.sort_by(|a, b| b.1.cmp(&a.1));
+                for (p, size) in d_vec {
+                    println!("  \u{26A0}\u{FE0F} Found massive unindexed directory: {} ({})", p.display().to_string().yellow(), format_size(size, DECIMAL).red());
+                    println!("     Run `bart index add {}` to monitor it.", p.display());
+                }
             }
         }
     }
