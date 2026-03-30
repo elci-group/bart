@@ -1,0 +1,81 @@
+.TH BART 1 "March 2026" "0.1.32" "User Commands"
+.SH NAME
+bart \- A fast, highly visual directory analysis tool
+.SH SYNOPSIS
+.B bart
+[\fIOPTIONS\fR] [\fIPATH\fR]
+.SH DESCRIPTION
+.B bart
+is a command-line tool written in Rust for analyzing and visualizing directory usage. It goes beyond combining `tree` and `du`, acting as a temporal filesystem profiler with interactive filtering, semantic code grouping, and beautiful emoji-based terminal output.
+.PP
+By default, bart performs a parallel directory scan respecting .gitignore rules and highlights hotspots based on their size relative to their parent directories. It leverages visual density encoding and semantic emojis to provide immediate clarity into directory contents.
+.SH OPTIONS
+.TP
+.BR \-d ", " \-\-depth " "\fIDEPTH\fR
+Maximum depth to display. (default: 1)
+.TP
+.BR \-n ", " \-\-limit " "\fILIMIT\fR
+Number of top entries to show per directory (0 for all). (default: 0)
+.TP
+.BR \-s ", " \-\-sort " "\fISORT\fR
+Sort output by \fBsize\fR or \fBname\fR. (default: size)
+.TP
+.BR \-w ", " \-\-watch
+Watch the directory for live updates.
+.TP
+.BR \-f ", " \-\-filter
+Launch the interactive TUI to filter by file format and perform actions such as open, edit, and remove.
+.TP
+.BR \-\-no\-ignore
+Do not respect .gitignore rules and include typically ignored directories (such as .git, node_modules, target).
+.TP
+.BR \-\-json
+Export the entire directory structure to structured JSON format.
+.TP
+.BR \-\-csv
+Export the entire directory structure to CSV format.
+.TP
+.BR \-\-diff
+Compare the current directory against the previous scan, displaying a differential size breakdown (NEW, DEL, and Δ).
+.TP
+.BR \-\-explain
+Perform a deep semantic breakdown showing exactly why a directory is large (e.g., Rust Build Artifacts, Vendored Dependencies, Text/Markdown).
+.TP
+.BR \-h ", " \-\-help
+Print help information.
+.TP
+.BR \-V ", " \-\-version
+Print version information.
+.SH ENVIRONMENT
+.TP
+.B EDITOR
+The editor to use when editing files in the interactive TUI (\fI--filter\fR). Defaults to `nano` if not set. This can also be configured in `~/.bartrc` by setting `EDITOR=your_editor`.
+.SH EXAMPLES
+Scan the current directory up to depth 1:
+.RS 4
+.B bart
+.RE
+.PP
+Find out exactly why your project is so heavy:
+.RS 4
+.B bart \-\-explain
+.RE
+.PP
+Compare how much space was added or removed since the last scan:
+.RS 4
+.B bart \-\-diff
+.RE
+.PP
+Launch interactive format filtering TUI:
+.RS 4
+.B bart \-f
+.RE
+.PP
+Export a complete directory scan (depth 999) as JSON:
+.RS 4
+.B bart \-\-json \-\-depth 999 > report.json
+.RE
+.SH BUGS
+Report bugs on the GitHub issue tracker at https://github.com/elci-group/bart/issues
+.SH AUTHOR
+elci-group

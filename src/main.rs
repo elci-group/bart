@@ -25,39 +25,44 @@ enum SortBy {
 }
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author, 
+    version, 
+    about = "A fast, highly visual directory analysis tool.", 
+    long_about = "Bart is a temporal filesystem profiler with interactive filtering, semantic code grouping, and beautiful emoji-based terminal output."
+)]
 struct Args {
-    #[arg(default_value = ".")]
+    #[arg(default_value = ".", help = "The directory path to scan")]
     path: PathBuf,
 
-    #[arg(short, long, default_value_t = 1)]
+    #[arg(short, long, default_value_t = 1, help = "Maximum depth to display")]
     depth: usize,
 
-    #[arg(short = 'n', long, default_value_t = 0)]
+    #[arg(short = 'n', long, default_value_t = 0, help = "Number of top entries to show per directory (0 for all)")]
     limit: usize,
 
-    #[arg(short, long, value_enum, default_value_t = SortBy::Size)]
+    #[arg(short, long, value_enum, default_value_t = SortBy::Size, help = "Sort by size or name")]
     sort: SortBy,
 
-    #[arg(short, long)]
+    #[arg(short, long, help = "Watch directory for live updates")]
     watch: bool,
 
-    #[arg(short = 'f', long)]
+    #[arg(short = 'f', long, help = "Launch the interactive TUI to filter by file format and perform actions")]
     filter: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "Do not respect .gitignore rules and include ignored directories (.git, node_modules, target)")]
     no_ignore: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "Export the entire directory structure to JSON format")]
     json: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "Export the entire directory structure to CSV format")]
     csv: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "Compare the current directory against the previous scan, displaying a differential size breakdown")]
     diff: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "Perform a deep semantic breakdown showing exactly why a directory is large")]
     explain: bool,
 }
 
