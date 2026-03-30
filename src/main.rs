@@ -64,6 +64,18 @@ struct Args {
 
     #[arg(long, help = "Perform a deep semantic breakdown showing exactly why a directory is large")]
     explain: bool,
+
+    #[arg(long, help = "Show the top N largest individual files globally")]
+    top: Option<usize>,
+
+    #[arg(long, help = "Calculate and display bloat score and auto-insights")]
+    insights: bool,
+
+    #[arg(long, help = "Identify known disposable heavyweights (e.g. target, node_modules) for safe cleanup (dry-run by default)")]
+    clean: bool,
+
+    #[arg(long, help = "Actually delete the directories/files identified by --clean")]
+    apply: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -436,17 +448,36 @@ fn main() {
     let _ = builder.add(path_clone.join(".gitignore"));
     let gitignore = builder.build().unwrap_or_else(|_| GitignoreBuilder::new("").build().unwrap());
 
+    let mut no_ignore = args.no_ignore;
+    if args.clean || args.insights || args.explain {
+        no_ignore = true;
+    }
+
     if args.explain {
         let dummy_scanned = Arc::new(AtomicU64::new(0));
-        let root = scan(path, 0, &args.sort, &dummy_scanned, &gitignore, args.no_ignore).unwrap();
+        let root = scan(path, 0, &args.sort, &dummy_scanned, &gitignore, no_ignore).unwrap();
         println!("Semantic size breakdown for '{}':", root.name().bold().blue());
         print_explain(&root);
         return;
     }
 
+    if let Some(top_n) = args.top {
+        let dummy_scanned = Arc::new(AtomicU64::new(0));
+        let root = scan(path, 0, &args.sort, &dummy_scanned, &gitignore, no_ignore).unwrap();
+        print_top(&root, top_n);
+        return;
+    }
+
+    if args.clean {
+        let dummy_scanned = Arc::new(AtomicU64::new(0));
+        let root = scan(path, 0, &args.sort, &dummy_scanned, &gitignore, no_ignore).unwrap();
+        run_clean(&root, args.apply);
+        return;
+    }
+
     if args.json || args.csv {
         let dummy_scanned = Arc::new(AtomicU64::new(0));
-        let root = scan(path, 0, &args.sort, &dummy_scanned, &gitignore, args.no_ignore).unwrap();
+        let root = scan(path, 0, &args.sort, &dummy_scanned, &gitignore, no_ignore).unwrap();
         if args.json {
             println!("{}", serde_json::to_string_pretty(&root).unwrap());
         } else if args.csv {
@@ -467,7 +498,7 @@ fn main() {
     if args.diff {
         if let Some(old_root) = cached_root {
             let dummy_scanned = Arc::new(AtomicU64::new(0));
-            let new_root = scan(path, 0, &args.sort, &dummy_scanned, &gitignore, args.no_ignore).unwrap();
+            let new_root = scan(path, 0, &args.sort, &dummy_scanned, &gitignore, no_ignore).unwrap();
             println!("Differential scan against previous run:");
             print_diff(&old_root, &new_root, "", args.depth);
             save_toon(&new_root, path);
@@ -515,6 +546,9 @@ fn main() {
                 &mut lines,
                 &mut out,
             );
+            if args.insights {
+                print_insights(&root);
+            }
         }
     } else {
         let root_to_render = if let Some(mut root) = cached_root {
@@ -589,7 +623,11 @@ fn main() {
         let mut builder = GitignoreBuilder::new(&path_clone);
         let _ = builder.add(path_clone.join(".gitignore"));
         let gitignore = builder.build().unwrap_or_else(|_| GitignoreBuilder::new("").build().unwrap());
-        let no_ignore = args.no_ignore;
+        
+        let mut no_ignore = args.no_ignore;
+        if args.clean || args.insights || args.explain {
+            no_ignore = true;
+        }
 
         let (tx, rx) = channel();
         
@@ -636,6 +674,9 @@ fn main() {
                                 &mut lines,
                                 &mut out,
                             );
+                            if args.insights {
+                                print_insights(&new_root);
+                            }
                         }
                         save_toon(&new_root, path);
                     }
@@ -1054,5 +1095,108 @@ fn print_explain(root: &Node) {
             format_size(size, DECIMAL),
             name.cyan()
         );
+    }
+}
+
+fn print_top(root: &Node, n: usize) {
+    let mut files = Vec::new();
+    fn collect(node: &Node, files: &mut Vec<(PathBuf, u64)>) {
+        if !node.is_dir {
+            files.push((node.path.clone(), node.size));
+        }
+        for child in &node.children {
+            collect(child, files);
+        }
+    }
+    collect(root, &mut files);
+    files.sort_by(|a, b| b.1.cmp(&a.1));
+    let take = files.into_iter().take(n).collect::<Vec<_>>();
+    println!("Top {} largest files globally:", n);
+    for (i, (path, size)) in take.iter().enumerate() {
+        println!("{}. {} \u{2192} {}", i + 1, path.display().to_string().cyan(), format_size(*size, DECIMAL).yellow());
+    }
+}
+
+fn print_insights(root: &Node) {
+    let total_size = root.size;
+    
+    fn calc_bloat(node: &Node) -> u64 {
+        let name = node.path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        if node.is_dir && (name == "target" || name == "node_modules" || name == ".git" || name == "vendor" || name == "__pycache__") {
+            return node.size;
+        } else if !node.is_dir && (name.ends_with(".log") || name == ".DS_Store") {
+            return node.size;
+        }
+        
+        let mut b = 0;
+        for child in &node.children {
+            b += calc_bloat(child);
+        }
+        b
+    }
+    let bloat_size = calc_bloat(root);
+    
+    if total_size > 0 {
+        let pct = (bloat_size as f64 / total_size as f64) * 100.0;
+        println!("\n\u{1F4A1} Auto-Insights:");
+        if pct > 50.0 {
+            println!("  \u{26A0}\u{FE0F}  {:.1}% of your project size is disposable bloat.", pct);
+        } else {
+            println!("  \u{2705} Your project looks reasonably clean ({:.1}% bloat).", pct);
+        }
+        
+        let score = (pct / 10.0).min(10.0);
+        println!("  Bloat Score: {:.1}/10", score);
+        
+        if bloat_size > 0 {
+            println!("  \u{1F4A1} You may want to run `bart --clean` to see what can be safely ignored or removed.");
+        }
+    }
+}
+
+fn run_clean(root: &Node, apply: bool) {
+    let mut targets = Vec::new();
+    fn find_targets(node: &Node, targets: &mut Vec<(PathBuf, u64, bool)>) {
+        let name = node.path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        if node.is_dir && (name == "target" || name == "node_modules" || name == "vendor" || name == "__pycache__") {
+            targets.push((node.path.clone(), node.size, true));
+            return; // don't recurse into them, we delete the whole dir
+        } else if !node.is_dir && (name.ends_with(".log") || name == ".DS_Store") {
+            targets.push((node.path.clone(), node.size, false));
+        } else {
+            for child in &node.children {
+                find_targets(child, targets);
+            }
+        }
+    }
+    find_targets(root, &mut targets);
+    
+    if targets.is_empty() {
+        println!("No disposable heavyweights found for cleanup.");
+        return;
+    }
+    
+    if apply {
+        println!("Cleaning up...");
+        let mut freed = 0;
+        for (p, size, is_dir) in targets {
+            let res = if is_dir { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
+            if res.is_ok() {
+                freed += size;
+                println!("  Deleted {}", p.display());
+            } else {
+                println!("  Failed to delete {}", p.display());
+            }
+        }
+        println!("Cleanup complete! Freed {}", format_size(freed, DECIMAL).green());
+    } else {
+        println!("Safe cleanup suggestions (Dry Run):");
+        let mut total_potential = 0;
+        for (p, size, _) in targets {
+            println!("  {} \u{2192} {}", p.display().to_string().red(), format_size(size, DECIMAL).yellow());
+            total_potential += size;
+        }
+        println!("\nTotal space that can be freed: {}", format_size(total_potential, DECIMAL).bold().green());
+        println!("Run with `--clean --apply` to delete these files/directories.");
     }
 }
