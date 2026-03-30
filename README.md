@@ -2,6 +2,10 @@
   <img src="bart-logo.png" alt="Bart Logo" width="500">
 </p>
 
+<p align="center">
+  <img src="demo.gif" alt="Bart Demo" width="800">
+</p>
+
 # Bart
 
 Bart is a fast, highly visual command-line tool written in Rust for analyzing and understanding directory usage. It goes beyond combining `tree` and `du`, acting as a temporal filesystem profiler with interactive filtering, semantic code grouping, and beautiful emoji-based terminal output.
