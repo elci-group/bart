@@ -103,6 +103,11 @@ enum IndexCommands {
     Remove { path: PathBuf },
     #[command(about = "List all tracked directories")]
     List,
+    #[command(about = "Toggle auto-indexing of newly discovered projects")]
+    Auto {
+        #[arg(help = "Enable or disable auto-indexing")]
+        enable: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -473,6 +478,31 @@ fn collect_stale(node: &Node, max_depth: usize, stale_paths: &mut HashSet<PathBu
     }
 }
 
+fn get_config_path() -> PathBuf {
+    get_bart_dir().join("config.json")
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct Config {
+    auto_index: bool,
+}
+
+fn load_config() -> Config {
+    let path = get_config_path();
+    if let Ok(content) = fs::read_to_string(&path) {
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Config::default()
+    }
+}
+
+fn save_config(config: &Config) {
+    let path = get_config_path();
+    if let Ok(file) = File::create(&path) {
+        let _ = serde_json::to_writer_pretty(file, config);
+    }
+}
+
 fn get_bart_dir() -> PathBuf {
     let mut path = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()));
     path.push(".bart");
@@ -533,6 +563,14 @@ fn manage_index(action: IndexCommands) {
                     println!("  - {}", p.display());
                 }
             }
+            let config = load_config();
+            println!("\nAuto-indexing: {}", if config.auto_index { "Enabled".green() } else { "Disabled".yellow() });
+        }
+        IndexCommands::Auto { enable } => {
+            let mut config = load_config();
+            config.auto_index = enable;
+            save_config(&config);
+            println!("{} Auto-indexing is now {}.", "\u{2705}".green(), if enable { "enabled" } else { "disabled" });
         }
     }
 }
@@ -580,10 +618,13 @@ fn manage_daemon(action: DaemonCommands) {
             }
 
             // Start Outer Daemon thread for discovery
-            let indices_clone = indices.clone();
+            let mut indices_clone = indices.clone();
             std::thread::spawn(move || {
                 loop {
+                    let config = load_config();
                     let mut discoveries = HashMap::new();
+                    let mut newly_indexed = false;
+
                     if let Ok(home) = std::env::var("HOME") {
                         let home_path = PathBuf::from(home);
                         if let Ok(entries) = fs::read_dir(&home_path) {
@@ -601,7 +642,19 @@ fn manage_daemon(action: DaemonCommands) {
                                         let dummy = Arc::new(AtomicU64::new(0));
                                         let gitignore = GitignoreBuilder::new("").build().unwrap();
                                         if let Ok(node) = scan(&path, 0, &SortBy::Size, &dummy, &gitignore, true) {
-                                            if node.size > 100_000_000 { // 100 MB threshold
+                                            let is_project = path.join("Cargo.toml").exists() 
+                                                || path.join("package.json").exists() 
+                                                || path.join(".git").exists()
+                                                || path.join("go.mod").exists();
+
+                                            if config.auto_index && is_project {
+                                                let mut current_indices = load_indices();
+                                                if current_indices.insert(path.clone()) {
+                                                    save_indices(&current_indices);
+                                                    indices_clone.insert(path.clone());
+                                                    newly_indexed = true;
+                                                }
+                                            } else if node.size > 100_000_000 { // 100 MB threshold
                                                 discoveries.insert(path, node.size);
                                             }
                                         }
@@ -609,6 +662,10 @@ fn manage_daemon(action: DaemonCommands) {
                                 }
                             }
                         }
+                    }
+                    if newly_indexed {
+                        // In a real implementation, we'd signal the watcher to reload.
+                        // For now, we'll suggest a daemon restart or wait for next event loop.
                     }
                     save_discoveries(&discoveries);
                     std::thread::sleep(Duration::from_secs(3600)); // sleep an hour
@@ -770,8 +827,22 @@ fn main() {
 
     let mut stale_paths = HashSet::new();
 
+    let mut is_indexed_and_managed = false;
+    if get_pid_path().exists() {
+        let indices = load_indices();
+        let abs_path = path.canonicalize().unwrap_or_else(|_| path.clone());
+        for idx in indices {
+            if abs_path == idx {
+                is_indexed_and_managed = true;
+                break;
+            }
+        }
+    }
+
     if let Some(root) = &cached_root {
-        collect_stale(root, args.depth, &mut stale_paths);
+        if !is_indexed_and_managed {
+            collect_stale(root, args.depth, &mut stale_paths);
+        }
     }
 
     // If cache doesn't exist or is completely stale
