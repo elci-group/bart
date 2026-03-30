@@ -537,13 +537,87 @@ fn manage_index(action: IndexCommands) {
     }
 }
 
+fn get_pid_path() -> PathBuf {
+    get_bart_dir().join("daemon.pid")
+}
+
 fn manage_daemon(action: DaemonCommands) {
     match action {
         DaemonCommands::Start => {
-            println!("{} Inner Daemon starting... (This will be implemented in Step 2)", "\u{23F3}".yellow());
+            let pid_path = get_pid_path();
+            let pid = std::process::id();
+            if let Ok(mut file) = File::create(&pid_path) {
+                let _ = writeln!(file, "{}", pid);
+            }
+            
+            println!("{} Inner Daemon started. Monitoring indexed paths...", "\u{2705}".green());
+            
+            let indices = load_indices();
+            if indices.is_empty() {
+                println!("No paths indexed. Run `bart index add <path>` first.");
+                let _ = fs::remove_file(&pid_path);
+                return;
+            }
+
+            let (tx, rx) = channel();
+            let mut watcher = notify::recommended_watcher(tx).unwrap();
+
+            for path in &indices {
+                if path.exists() {
+                    if let Err(e) = watcher.watch(path, RecursiveMode::Recursive) {
+                        eprintln!("Failed to watch {}: {:?}", path.display(), e);
+                    } else {
+                        println!("Watching {}", path.display());
+                    }
+                } else {
+                    eprintln!("Warning: Indexed path {} does not exist.", path.display());
+                }
+            }
+
+            for res in rx {
+                match res {
+                    Ok(event) => {
+                        if let EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) = event.kind {
+                            let mut affected_roots = HashSet::new();
+                            for p in &event.paths {
+                                let is_toon = p.file_name().and_then(|s| s.to_str()) == Some(".toon");
+                                if !is_toon {
+                                    for root in &indices {
+                                        if p.starts_with(root) {
+                                            affected_roots.insert(root.clone());
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            for root in affected_roots {
+                                let dummy_scanned = Arc::new(AtomicU64::new(0));
+                                let mut builder = GitignoreBuilder::new(&root);
+                                let _ = builder.add(root.join(".gitignore"));
+                                let gitignore = builder.build().unwrap_or_else(|_| GitignoreBuilder::new("").build().unwrap());
+                                
+                                if let Ok(node) = scan(&root, 0, &SortBy::Size, &dummy_scanned, &gitignore, false) {
+                                    save_toon(&node, &root);
+                                }
+                            }
+                        }
+                    },
+                    Err(e) => eprintln!("watch error: {:?}", e),
+                }
+            }
+            let _ = fs::remove_file(&pid_path);
         }
         DaemonCommands::Status => {
-            println!("Daemon Status: \u{26A0}\u{FE0F} Not running");
+            let pid_path = get_pid_path();
+            if pid_path.exists() {
+                if let Ok(content) = fs::read_to_string(&pid_path) {
+                    println!("Daemon Status: {} Running (PID: {})", "\u{2705}".green(), content.trim());
+                } else {
+                    println!("Daemon Status: \u{26A0}\u{FE0F} Running, but could not read PID");
+                }
+            } else {
+                println!("Daemon Status: \u{26A0}\u{FE0F} Not running");
+            }
         }
     }
 }
