@@ -1412,6 +1412,23 @@ fn print_insights(root: &Node) {
             println!("  \u{1F4A1} You may want to run `bart --clean` to see what can be safely ignored or removed.");
         }
     }
+
+    let discoveries = load_discoveries();
+    if !discoveries.is_empty() {
+        println!("\n\u{1F50D} Outer Daemon Discoveries:");
+        let mut d_vec: Vec<_> = discoveries.into_iter().collect();
+        d_vec.sort_by(|a, b| b.1.cmp(&a.1));
+        for (p, size) in d_vec {
+            println!("  \u{26A0}\u{FE0F}  Found massive unindexed directory: {} ({})", p.display().to_string().yellow(), format_size(size, DECIMAL).red());
+        }
+        println!("  \u{1F4A1} Run `bart index add <path>` to bring them under persistent monitoring.");
+    }
+
+    let pid_path = get_pid_path();
+    if !pid_path.exists() {
+        println!("\n\u{1F4A1} The bart daemon is not currently running.");
+        println!("  Run `bart daemon start` to enable historical tracking and predictive cleanup.");
+    }
 }
 
 fn run_clean(root: &Node, apply: bool) {
