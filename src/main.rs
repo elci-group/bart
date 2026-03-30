@@ -1,5 +1,5 @@
 use chrono::{Local, TimeZone};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use colored::*;
 use crossterm::{cursor, terminal, ExecutableCommand, QueueableCommand};
 use humansize::{format_size, DECIMAL};
@@ -76,6 +76,41 @@ struct Args {
 
     #[arg(long, help = "Actually delete the directories/files identified by --clean")]
     apply: bool,
+
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    #[command(about = "Manage tracked directories for the daemon")]
+    Index {
+        #[command(subcommand)]
+        action: IndexCommands,
+    },
+    #[command(about = "Manage the background observability daemon")]
+    Daemon {
+        #[command(subcommand)]
+        action: DaemonCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum IndexCommands {
+    #[command(about = "Add a directory to the watch list")]
+    Add { path: PathBuf },
+    #[command(about = "Remove a directory from the watch list")]
+    Remove { path: PathBuf },
+    #[command(about = "List all tracked directories")]
+    List,
+}
+
+#[derive(Subcommand, Debug)]
+enum DaemonCommands {
+    #[command(about = "Start the observability daemon")]
+    Start,
+    #[command(about = "Check daemon status")]
+    Status,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -438,8 +473,92 @@ fn collect_stale(node: &Node, max_depth: usize, stale_paths: &mut HashSet<PathBu
     }
 }
 
+fn get_bart_dir() -> PathBuf {
+    let mut path = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()));
+    path.push(".bart");
+    path
+}
+
+fn get_indices_path() -> PathBuf {
+    get_bart_dir().join("indices.json")
+}
+
+fn load_indices() -> HashSet<PathBuf> {
+    let path = get_indices_path();
+    if let Ok(content) = fs::read_to_string(&path) {
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        HashSet::new()
+    }
+}
+
+fn save_indices(indices: &HashSet<PathBuf>) {
+    let dir = get_bart_dir();
+    if !dir.exists() {
+        fs::create_dir_all(&dir).unwrap();
+    }
+    let path = get_indices_path();
+    if let Ok(file) = File::create(&path) {
+        let _ = serde_json::to_writer_pretty(file, indices);
+    }
+}
+
+fn manage_index(action: IndexCommands) {
+    let mut indices = load_indices();
+    match action {
+        IndexCommands::Add { path } => {
+            let abs_path = path.canonicalize().unwrap_or(path);
+            if indices.insert(abs_path.clone()) {
+                save_indices(&indices);
+                println!("{} Added {} to the watch list.", "\u{2705}".green(), abs_path.display());
+            } else {
+                println!("{} {} is already in the watch list.", "\u{2139}\u{FE0F}".yellow(), abs_path.display());
+            }
+        }
+        IndexCommands::Remove { path } => {
+            let abs_path = path.canonicalize().unwrap_or(path);
+            if indices.remove(&abs_path) {
+                save_indices(&indices);
+                println!("{} Removed {} from the watch list.", "\u{2705}".green(), abs_path.display());
+            } else {
+                println!("{} {} was not in the watch list.", "\u{2139}\u{FE0F}".yellow(), abs_path.display());
+            }
+        }
+        IndexCommands::List => {
+            println!("Tracked Directories:");
+            if indices.is_empty() {
+                println!("  (none)");
+            } else {
+                for p in &indices {
+                    println!("  - {}", p.display());
+                }
+            }
+        }
+    }
+}
+
+fn manage_daemon(action: DaemonCommands) {
+    match action {
+        DaemonCommands::Start => {
+            println!("{} Inner Daemon starting... (This will be implemented in Step 2)", "\u{23F3}".yellow());
+        }
+        DaemonCommands::Status => {
+            println!("Daemon Status: \u{26A0}\u{FE0F} Not running");
+        }
+    }
+}
+
 fn main() {
     let args = Args::parse();
+
+    if let Some(cmd) = args.command {
+        match cmd {
+            Commands::Index { action } => manage_index(action),
+            Commands::Daemon { action } => manage_daemon(action),
+        }
+        return;
+    }
+
     let path = &args.path;
     let path_clone = path.clone();
     let term_width = term_size::dimensions().map(|(w, _)| w).unwrap_or(80);
