@@ -1,0 +1,50 @@
+# kaptaind configuration — Vico ecosystem monitoring
+
+[watch]
+path = "."
+recursive = true
+ignore_file = ".kaptainignore"
+
+[cluster]
+window = 5
+adaptive = true
+min_window_secs = 2
+max_window_secs = 60
+burst_threshold = 20
+max_paths = 25
+flush_after = 10
+
+[weights]
+s = 0.30
+a = 0.35
+d = 0.20
+r = 0.15
+
+[push]
+enabled = true
+branch = "master"
+
+[ratelimit]
+min_commit_interval = 10
+
+[version_thresholds]
+patch = 0.0
+minor = 0.6
+
+[test]
+command = "cargo test"
+required = false
+
+[staging]
+mode = "cluster"
+exclude = [
+  "*.log",
+  ".env*",
+  "*.db",
+  "*.sqlite",
+  "node_modules/**",
+  "dist/**",
+  "target/**",
+  ".kaptaind/**",
+  
+]

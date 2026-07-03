@@ -2,3 +2,6 @@
 
 # kaptaind runtime state
 .kaptaind/
+
+# toon runtime state
+.toon
