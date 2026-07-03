@@ -1,1 +1,4 @@
 /target
+
+# kaptaind runtime state
+.kaptaind/

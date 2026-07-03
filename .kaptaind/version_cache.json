@@ -1,0 +1,9 @@
+{
+  "entries": {
+    "rust": {
+      "version": "2021",
+      "detected_from": "Cargo.toml",
+      "cached_at": 1783089469
+    }
+  }
+}
