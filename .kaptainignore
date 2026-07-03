@@ -1,0 +1,11 @@
+# kaptaind ignore rules
+.git
+.kaptaind
+.DS_Store
+*.log
+node_modules
+target
+dist
+build
+.env*
+
