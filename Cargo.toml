@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
 walkdir = "2.4"
-colored = "2.0"
 humansize = "2.1"
 term_size = "0.3"
 unicode-width = "0.1"
@@ -17,3 +16,5 @@ crossterm = "0.29.0"
 chrono = "0.4.44"
 rayon = "1.11.0"
 ignore = "0.4.25"
+form3 = { path = "../3form" }
+bound-core = { path = "../bound/crates/bound-core" }
