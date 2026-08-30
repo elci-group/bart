@@ -39,6 +39,20 @@ Bart is a Rust CLI tool for visualizing directory structures with file sizes and
 - **unicode-width**: Correct string width calculation for alignment.
 - **walkdir**: Listed in `Cargo.toml` but `fs::read_dir` is currently used for traversal.
 
+## Analysis
+
+`uni` (https://github.com/elci-group/uni) is the deterministic multi-tool
+analysis snapshot for this ecosystem, bart included. Run it against this
+project before calling a change complete:
+
+```
+uni --fail-under 80 .
+```
+
+Use `--only bart` to run just bart's own check through uni, `--json` for
+machine-readable output, and `uni revise` to have flagged tools attempt their
+own fix. See uni's own `.skillastic/skills/uni.md` skill for full details.
+
 ## Gotchas & Patterns
 - **Manual Recursion**: The directory scanning is implemented manually with `fs::read_dir` rather than using `walkdir` iterator, likely to have fine-grained control over the tree structure construction.
 - **Visual Alignment**: The tree visualization calculates padding manually using `unicode-width` to ensure bars align correctly even with unicode characters.
