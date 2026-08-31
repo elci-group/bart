@@ -423,6 +423,7 @@ fn export_bound_snapshot(node: &Node) -> std::io::Result<bound_core::Snapshot> {
             total_bytes,
             total_lines,
         },
+        redaction_stats: None,
     })
 }
 
@@ -460,6 +461,7 @@ fn collect_snapshot_files(
             content: None,
             dependencies: Vec::new(),
             furnace_report: None,
+            redactions: None,
         });
     }
 }
