@@ -133,6 +133,8 @@ enum Commands {
         #[command(subcommand)]
         action: DaemonCommands,
     },
+    #[command(about = "Clone the latest bart source and install it with `baby --user`")]
+    Update,
 }
 
 #[derive(Subcommand, Debug)]
@@ -1063,6 +1065,64 @@ fn manage_daemon(action: DaemonCommands) {
     }
 }
 
+fn run_update() {
+    let repo_url = "git@github.com:elci-group/bart.git";
+    let checkout_dir = std::env::temp_dir().join(format!(
+        "bart-update-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    ));
+
+    if checkout_dir.exists() {
+        if let Err(e) = fs::remove_dir_all(&checkout_dir) {
+            eprintln!("Error cleaning up {}: {e}", checkout_dir.display());
+            std::process::exit(1);
+        }
+    }
+
+    println!("Cloning latest bart from {repo_url}…");
+    let clone_status = std::process::Command::new("git")
+        .args(["clone", "--depth", "1", repo_url])
+        .arg(&checkout_dir)
+        .status();
+    match clone_status {
+        Ok(status) if status.success() => {}
+        Ok(_) => {
+            eprintln!("Error: git clone of {repo_url} failed");
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("Error running git clone: {e}");
+            std::process::exit(1);
+        }
+    }
+
+    println!("Installing with 'baby --user'…");
+    let install_result = std::process::Command::new("baby")
+        .arg("--user")
+        .current_dir(&checkout_dir)
+        .status();
+
+    let _ = fs::remove_dir_all(&checkout_dir);
+
+    match install_result {
+        Ok(status) if status.success() => {}
+        Ok(_) => {
+            eprintln!("Error: 'baby --user' install failed");
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("Error running 'baby --user' (is baby installed and on PATH?): {e}");
+            std::process::exit(1);
+        }
+    }
+
+    println!("bart updated to the latest version");
+}
+
 fn __curly_original_main() {
     let args = Args::parse();
 
@@ -1070,6 +1130,7 @@ fn __curly_original_main() {
         match cmd {
             Commands::Index { action } => manage_index(action),
             Commands::Daemon { action } => manage_daemon(action),
+            Commands::Update => run_update(),
         }
         return;
     }
